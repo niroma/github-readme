@@ -8,9 +8,10 @@
  * Author URI: http://jason.stallin.gs
  */
 
-require_once 'Michelf/MarkdownExtra.inc.php';
+require_once 'class-markdown.php';
 
-use \Michelf\MarkdownExtra;
+//use Markdown;
+use WordPressdotorg\Plugin_Directory\Markdown;
 
 add_shortcode( 'github_readme', 'github_readme_default' );
 add_shortcode( 'github_markdown', 'github_readme_markdown' );
@@ -28,8 +29,7 @@ function github_readme_default( $atts ) {
 		'repo'   => 'octalmage/GitHub Shortcode',
 		'trim'   => 0,
 		'cache'  => 12 * HOUR_IN_SECONDS,
-		'branch' => '',
-		'token' => $_ENV["GIT_TOKEN"],
+		'branch' => ''
 	);
 
 	$atts = shortcode_atts(
@@ -42,7 +42,6 @@ function github_readme_default( $atts ) {
 	$trim   = empty( $atts['trim'] ) ? $defaults['trim'] : abs( (int) $atts['trim'] );
 	$cache  = empty( $atts['cache'] ) ? $defaults['cache'] : abs( (int) $atts['cache'] );
 	$branch = empty( $atts['branch'] ) ? $defaults['branch'] : $atts['branch'];
-	$token = empty( $atts['token'] ) ? $defaults['token'] : $atts['token'];
 
 	$transient = github_readme_transient_name( 'github_readme_' . $repo . '_' . $branch . '_' . $trim . '_' . $cache );
 
@@ -55,13 +54,14 @@ function github_readme_default( $atts ) {
 			$url .= '?ref=' . $branch;
 		}
 
-		$data = github_readme_get_url( $url, $token );
+		$data = github_readme_get_url( $url );
 
 		$json     = json_decode( $data );
 		$markdown = base64_decode( $json->content );
 		$markdown = github_readme_trim_markdown( $markdown, $trim );
-
-		$html = MarkdownExtra::defaultTransform( $markdown );
+		
+		$md = new Markdown;
+		$html = $md->transform( $markdown );
 		set_transient( $transient, $html, $cache );
 	}
 
@@ -82,7 +82,6 @@ function github_readme_markdown( $atts ) {
 		'cache'  => 60,
 		'file'   => '/readme',
 		'branch' => 'master',
-		'token' => $_ENV["GIT_TOKEN"],
 	);
 
 	$atts = shortcode_atts(
@@ -96,7 +95,6 @@ function github_readme_markdown( $atts ) {
 	$cache  = empty( $atts['cache'] ) ? $defaults['cache'] : abs( (int) $atts['cache'] );
 	$file   = empty( $atts['file'] ) ? $defaults['file'] : $atts['file'];
 	$branch = empty( $atts['branch'] ) ? $defaults['branch'] : $atts['branch'];
-	$token = empty( $atts['token'] ) ? $defaults['token'] : $atts['token'];
 
 	$transient = github_readme_transient_name( 'github_markdown_' . $repo . '_' . $branch . '_' . $file . '_' . $trim . '_' . $cache );
 
@@ -105,10 +103,11 @@ function github_readme_markdown( $atts ) {
 	if ( false === $html ) {
 		$url = 'https://raw.githubusercontent.com/' . $repo . '/' . $branch . '/' . $file;
 
-		$markdown = github_readme_get_url( $url, $token );
+		$markdown = github_readme_get_url( $url );
 		$markdown = github_readme_trim_markdown( $markdown, $trim );
 
-		$html = MarkdownExtra::defaultTransform( $markdown );
+		$md = new Markdown;
+		$html = $md->transform( $markdown );
 		set_transient( $transient, $html, $cache );
 	}
 
@@ -128,7 +127,6 @@ function github_readme_wikipage( $atts ) {
 		'trim'  => 0,
 		'cache' => 60,
 		'page'  => '',
-		'token' => $_ENV["GIT_TOKEN"],
 	);
 
 	shortcode_atts(
@@ -141,7 +139,6 @@ function github_readme_wikipage( $atts ) {
 	$trim  = empty( $atts['trim'] ) ? $defaults['trim'] : abs( (int) $atts['trim'] );
 	$cache = empty( $atts['cache'] ) ? $defaults['cache'] : abs( (int) $atts['cache'] );
 	$page  = empty( $atts['page'] ) ? $defaults['page'] : $atts['page'];
-	$token = empty( $atts['token'] ) ? $defaults['token'] : $atts['token'];
 
 	$transient = github_readme_transient_name( 'github_wikipage_' . $repo . '_' . $page . '_' . $trim . '_' . $cache );
 
@@ -150,10 +147,11 @@ function github_readme_wikipage( $atts ) {
 	if ( false === $html ) {
 		$url = 'https://raw.githubusercontent.com/wiki/' . $repo . '/' . $page . '.md';
 
-		$markdown = github_readme_get_url( $url, $token );
+		$markdown = github_readme_get_url( $url );
 		$markdown = github_readme_trim_markdown( $markdown, $trim );
 
-		$html = MarkdownExtra::defaultTransform( $markdown );
+		$md = new Markdown;
+		$html = $md->transform( $markdown );
 		set_transient( $transient, $html, $cache );
 	}
 
@@ -167,19 +165,10 @@ function github_readme_wikipage( $atts ) {
  *
  * @return string
  */
-function github_readme_get_url( $url, $token ) {
+function github_readme_get_url( $url ) {
 	$data = '';
 
-	if ($token !== '') {
-		$headers = array(
-			'Authorization' => 'token ' . $token,
-			'Accept' => 'application/vnd.github.v3.raw'
-		);
-		$args = array('headers' => $headers);
-		$response = wp_remote_get( $url, $args );
-	} else {
-		$response = wp_remote_get( $url );
-	}
+	$response = wp_remote_get( $url );
 
 	if ( ! empty( $response['response']['code'] ) && 200 === $response['response']['code'] && ! empty( $response['body'] ) ) {
 		$data = $response['body'];
